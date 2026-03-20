@@ -195,4 +195,243 @@
             border-top: 3px solid #667eea;
             border-radius: 50%;
             animation: spin 1s linear infinite;
-            margin-left
+            margin-left: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .example-links {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .example-link {
+            padding: 5px 12px;
+            background: #f0f0f0;
+            border-radius: 20px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .example-link:hover {
+            background: #e0e0e0;
+        }
+        
+        @media (max-width: 600px) {
+            .input-group {
+                flex-direction: column;
+            }
+            
+            .header h1 {
+                font-size: 1.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 URL Analyzer</h1>
+            <p>Интеллектуальный анализ ссылок на фишинг и вредоносное ПО</p>
+        </div>
+        
+        <div class="card">
+            <div class="input-group">
+                <input type="text" class="url-input" id="urlInput" 
+                       placeholder="Введите URL для проверки...">
+                <button class="analyze-btn" id="analyzeBtn">Анализировать</button>
+            </div>
+            
+            <div class="example-links">
+                <span style="font-size: 12px; color: #666;">Примеры:</span>
+                <span class="example-link" data-url="https://google.com">google.com</span>
+                <span class="example-link" data-url="https://paypal.com">paypal.com</span>
+                <span class="example-link" data-url="http://secure-login-verify.xyz">secure-login-verify.xyz</span>
+                <span class="example-link" data-url="http://192.168.1.1">192.168.1.1</span>
+                <span class="example-link" data-url="https://bit.ly/3fG4hJ">bit.ly ссылка</span>
+            </div>
+            
+            <div id="result" class="result"></div>
+        </div>
+        
+        <div class="card">
+            <h3 style="margin-bottom: 15px;">📊 Как это работает</h3>
+            <p style="margin-bottom: 15px;">Анализатор использует машинное обучение для оценки подозрительности URL на основе более чем 20 признаков:</p>
+            <div class="features-grid" id="featuresInfo">
+                <div class="feature-item"><span class="feature-name">Длина URL</span><span>слишком длинные ссылки подозрительны</span></div>
+                <div class="feature-item"><span class="feature-name">IP вместо домена</span><span>прямое использование IP адреса</span></div>
+                <div class="feature-item"><span class="feature-name">Сокращатели ссылок</span><span>bit.ly, goo.gl и другие</span></div>
+                <div class="feature-item"><span class="feature-name">Подозрительные слова</span><span>secure, login, verify и т.д.</span></div>
+                <div class="feature-item"><span class="feature-name">Энтропия</span><span>случайность символов в URL</span></div>
+                <div class="feature-item"><span class="feature-name">Количество поддоменов</span><span>многоуровневые домены</span></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const urlInput = document.getElementById('urlInput');
+        const resultDiv = document.getElementById('result');
+        
+        // Примеры ссылок
+        document.querySelectorAll('.example-link').forEach(link => {
+            link.addEventListener('click', () => {
+                urlInput.value = link.dataset.url;
+                analyze();
+            });
+        });
+        
+        // Анализ по Enter
+        urlInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') analyze();
+        });
+        
+        analyzeBtn.addEventListener('click', analyze);
+        
+        async function analyze() {
+            const url = urlInput.value.trim();
+            if (!url) {
+                showError('Пожалуйста, введите URL');
+                return;
+            }
+            
+            // Показываем загрузку
+            analyzeBtn.disabled = true;
+            analyzeBtn.innerHTML = 'Анализирую... <span class="loader"></span>';
+            resultDiv.style.display = 'none';
+            
+            try {
+                const response = await fetch('/api/analyze', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ url: url })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Ошибка анализа');
+                }
+                
+                const data = await response.json();
+                displayResult(data);
+                
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                analyzeBtn.disabled = false;
+                analyzeBtn.innerHTML = 'Анализировать';
+            }
+        }
+        
+        function displayResult(data) {
+            const isMalicious = data.is_malicious;
+            const confidence = data.confidence;
+            const probability = data.probability;
+            const features = data.features;
+            const explanation = data.explanation;
+            
+            // Определяем класс результата
+            let resultClass = '';
+            let title = '';
+            let icon = '';
+            
+            if (isMalicious) {
+                resultClass = 'malicious';
+                title = '⚠️ ПОДОЗРИТЕЛЬНЫЙ URL';
+                icon = '⚠️';
+            } else {
+                resultClass = 'safe';
+                title = '✅ БЕЗОПАСНЫЙ URL';
+                icon = '✅';
+            }
+            
+            // Формируем HTML
+            let html = `
+                <div class="result-title">${icon} ${title}</div>
+                <div class="summary">${explanation?.summary || ''}</div>
+                <div class="confidence-bar">
+                    <div class="confidence-fill ${resultClass}" style="width: ${confidence * 100}%"></div>
+                </div>
+                <div style="font-size: 14px; margin-top: 10px;">
+                    Уверенность: ${(confidence * 100).toFixed(1)}%
+                </div>
+                <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                    Безопасный: ${(probability.safe * 100).toFixed(1)}% / Вредоносный: ${(probability.malicious * 100).toFixed(1)}%
+                </div>
+            `;
+            
+            // Добавляем факторы риска
+            if (explanation?.risk_factors?.length > 0) {
+                html += `<div class="risk-factors"><strong>📌 Факторы риска:</strong>`;
+                explanation.risk_factors.forEach(factor => {
+                    html += `
+                        <div class="risk-factor">
+                            <strong>${factor.feature}:</strong> ${factor.explanation}
+                        </div>
+                    `;
+                });
+                html += `</div>`;
+            }
+            
+            // Добавляем детальные признаки
+            html += `<details style="margin-top: 20px;">
+                        <summary style="cursor: pointer; font-weight: 500;">🔍 Детальные признаки (${Object.keys(features).length})</summary>
+                        <div class="features-grid">`;
+            
+            for (const [key, value] of Object.entries(features)) {
+                let displayValue = value;
+                if (typeof value === 'number') {
+                    displayValue = value.toFixed(4);
+                }
+                html += `
+                    <div class="feature-item">
+                        <span class="feature-name">${key.replace(/_/g, ' ')}</span>
+                        <span class="feature-value">${displayValue}</span>
+                    </div>
+                `;
+            }
+            
+            html += `</div></details>`;
+            
+            resultDiv.innerHTML = html;
+            resultDiv.className = `result ${resultClass}`;
+            resultDiv.style.display = 'block';
+            
+            // Плавный скролл
+            resultDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        
+        function showError(message) {
+            resultDiv.innerHTML = `
+                <div class="result-title">❌ Ошибка</div>
+                <div class="summary">${message}</div>
+            `;
+            resultDiv.className = 'result warning';
+            resultDiv.style.display = 'block';
+        }
+        
+        // Проверка статуса сервера
+        async function checkHealth() {
+            try {
+                const response = await fetch('/api/health');
+                const data = await response.json();
+                if (!data.model_loaded) {
+                    console.warn('Модель не загружена. Необходимо обучить модель.');
+                }
+            } catch (error) {
+                console.error('Сервер недоступен:', error);
+            }
+        }
+        
+        checkHealth();
+    </script>
+</body>
+</html>
